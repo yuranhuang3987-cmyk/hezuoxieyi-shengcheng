@@ -3,11 +3,97 @@
 
 import os
 import json
+import subprocess
+import time
 from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from models import db, History
-from utils import extract_info, calc_agreement_date, generate_agreement
+from utils import extract_info, calc_agreement_date, generate_agreement, check_minor_owners
+
+
+def convert_doc_to_docx(doc_path):
+    """将 .doc 转换为 .docx（使用 Windows Word）"""
+    import shutil
+    import uuid
+    
+    # 创建 Windows 临时目录
+    win_temp_dir = "D:\\temp"
+    temp_id = str(uuid.uuid4())[:8]
+    
+    # 复制文件到 Windows 文件系统
+    temp_doc = os.path.join(win_temp_dir, f"{temp_id}_convert.doc")
+    temp_docx = os.path.join(win_temp_dir, f"{temp_id}_convert.docx")
+    
+    # WSL 路径
+    wsl_temp_doc = f"/mnt/d/temp/{temp_id}_convert.doc"
+    wsl_temp_docx = f"/mnt/d/temp/{temp_id}_convert.docx"
+    
+    try:
+        # 确保临时目录存在
+        os.makedirs("/mnt/d/temp", exist_ok=True)
+        
+        # 复制到 Windows 文件系统
+        shutil.copy2(doc_path, wsl_temp_doc)
+        print(f"[DEBUG] 复制文件到: {wsl_temp_doc}")
+        
+        # PowerShell 转换脚本
+        ps_script = f'''
+$word = New-Object -ComObject Word.Application
+$word.Visible = $false
+try {{
+    $doc = $word.Documents.Open("{temp_doc}")
+    $doc.SaveAs("{temp_docx}", 16)
+    $doc.Close()
+    Write-Host "Success"
+}} catch {{
+    Write-Host "Error: $_"
+}} finally {{
+    $word.Quit()
+}}
+'''
+        
+        print(f"[DEBUG] 执行 PowerShell 转换...")
+        result = subprocess.run(
+            ['powershell.exe', '-Command', ps_script],
+            capture_output=True,
+            timeout=60
+        )
+        
+        output = result.stdout.decode('utf-8', errors='ignore')
+        print(f"[DEBUG] PowerShell 输出: {output}")
+        
+        time.sleep(2)  # 等待文件写入完成
+        
+        # 检查转换后的文件
+        if os.path.exists(wsl_temp_docx):
+            # 复制到上传目录
+            final_docx = doc_path.rsplit('.', 1)[0] + '.docx'
+            shutil.copy2(wsl_temp_docx, final_docx)
+            print(f"✅ .doc 转换成功: {final_docx}")
+            
+            # 清理临时文件
+            try:
+                os.remove(wsl_temp_doc)
+                os.remove(wsl_temp_docx)
+            except:
+                pass
+            
+            return final_docx
+        else:
+            print(f"❌ .doc 转换失败: 文件不存在")
+            
+    except Exception as e:
+        print(f"❌ .doc 转换异常: {e}")
+    finally:
+        # 清理临时文件
+        try:
+            if os.path.exists(wsl_temp_doc):
+                os.remove(wsl_temp_doc)
+        except:
+            pass
+    
+    return None
 
 # 配置
 app = Flask(__name__)
@@ -36,7 +122,7 @@ with app.app_context():
     db.create_all()
 
 # 允许的文件扩展名
-ALLOWED_EXTENSIONS = {"docx"}
+ALLOWED_EXTENSIONS = {"docx", "doc"}
 
 
 def allowed_file(filename):
@@ -70,7 +156,7 @@ def preview_batch():
     valid_files = [f for f in files if f.filename and allowed_file(f.filename)]
     
     if not valid_files:
-        return jsonify({"ok": False, "err": "没有有效的 .docx 文件"}), 400
+        return jsonify({"ok": False, "err": "没有有效的 .doc/.docx 文件"}), 400
 
     try:
         all_software = []
@@ -78,15 +164,29 @@ def preview_batch():
         upload_paths = []
         
         for file in valid_files:
-            # 保存上传文件
-            filename = secure_filename(file.filename)
-            timestamp = str(int(os.times().elapsed * 1000))
+            # 保存上传文件（使用原始文件名判断类型）
+            original_filename = file.filename
+            filename = secure_filename(original_filename)
+            timestamp = str(int(time.time() * 1000))
             upload_path = os.path.join(UPLOAD_DIR, f"{timestamp}_{filename}")
             file.save(upload_path)
-            upload_paths.append(upload_path)
+            
+            # 如果是 .doc 文件，转换为 .docx（使用原始文件名判断）
+            actual_path = upload_path
+            if original_filename.lower().endswith('.doc') and not original_filename.lower().endswith('.docx'):
+                print(f"[INFO] 检测到 .doc 文件: {original_filename}", flush=True)
+                converted_path = convert_doc_to_docx(upload_path)
+                if converted_path:
+                    actual_path = converted_path
+                    print(f"[INFO] 使用转换后的文件: {actual_path}", flush=True)
+                else:
+                    print(f"[ERROR] .doc 转换失败，跳过该文件", flush=True)
+                    continue
+            
+            upload_paths.append(actual_path)
             
             # 提取信息
-            software_list = extract_info(upload_path)
+            software_list = extract_info(actual_path)
             
             if software_list:
                 # 添加文件来源信息
@@ -102,6 +202,13 @@ def preview_batch():
 
         if not all_software:
             return jsonify({"ok": False, "err": "无法提取软件信息"}), 400
+
+        # 检查未成年人著作权人
+        minors = []
+        if all_software:
+            # 使用第一个软件的协议日期检查
+            first_agreement_date = calc_agreement_date(all_software[0]["date"])
+            minors = check_minor_owners(all_owners, first_agreement_date)
 
         # 返回提取的信息
         result = {
@@ -122,12 +229,16 @@ def preview_batch():
                 "owners_count": len(all_owners),
                 "owners": all_owners,
                 "upload_paths": upload_paths,
+                "minors": minors,  # 添加未成年人信息
             },
         }
 
         return jsonify(result)
 
     except Exception as e:
+        import traceback
+        print(f"[ERROR] preview_batch 处理失败: {str(e)}", flush=True)
+        print(traceback.format_exc(), flush=True)
         return jsonify({"ok": False, "err": f"处理失败: {str(e)}"}), 500
 
 

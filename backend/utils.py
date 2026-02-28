@@ -86,6 +86,7 @@ def extract_info(file_path):
                             owners.append(
                                 {
                                     "name": row[0],
+                                    "idn": idn.strip(),  # 保存身份证号码
                                     "is_person": bool(re.match(r"^\d{17}[\dXx]$", idn.strip())),
                                 }
                             )
@@ -135,6 +136,62 @@ def calc_agreement_date(dev_date):
     except:
         pass
     return "2025年1月1日"
+
+
+def check_minor_owners(owners, agreement_date):
+    """
+    检查是否有未成年著作权人
+    
+    Args:
+        owners: 著作权人列表
+        agreement_date: 协议签署日期（格式：2025年1月1日）
+    
+    Returns:
+        list: 未成年著作权人列表 [{"name": "张三", "age": 16}, ...]
+    """
+    minors = []
+    
+    try:
+        # 解析协议日期
+        if "年" in agreement_date:
+            p = agreement_date.replace("年", " ").replace("月", " ").replace("日", "").split()
+            agr_year, agr_month, agr_day = int(p[0]), int(p[1]), int(p[2])
+        else:
+            return minors
+    except:
+        return minors
+    
+    for owner in owners:
+        # 只检查自然人
+        if not owner.get("is_person"):
+            continue
+        
+        idn = owner.get("idn", "")
+        name = owner.get("name", "")
+        
+        # 从身份证号码提取出生日期
+        if len(idn) >= 14 and idn[:17].isdigit():
+            try:
+                # 身份证第7-14位是出生日期（YYYYMMDD）
+                birth_year = int(idn[6:10])
+                birth_month = int(idn[10:12])
+                birth_day = int(idn[12:14])
+                
+                # 计算年龄
+                age = agr_year - birth_year
+                if (agr_month, agr_day) < (birth_month, birth_day):
+                    age -= 1
+                
+                # 如果未成年，添加到列表
+                if age < 18:
+                    minors.append({
+                        "name": name,
+                        "age": age
+                    })
+            except:
+                pass
+    
+    return minors
 
 
 def replace_paragraph_text(para, old_text, new_text):

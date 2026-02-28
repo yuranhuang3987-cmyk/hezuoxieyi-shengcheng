@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Upload, Button, Card, message, Spin, Descriptions, Tag, Divider, Space } from 'antd';
-import { UploadOutlined, FileTextOutlined, DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Upload, Button, Card, message, Spin, Descriptions, Tag, Divider, Space, Modal } from 'antd';
+import { UploadOutlined, FileTextOutlined, DownloadOutlined, ReloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
 const { Dragger } = Upload;
@@ -16,7 +16,7 @@ function Home() {
   const uploadProps = {
     name: 'file',
     multiple: true,
-    accept: '.docx',
+    accept: '.docx,.doc',
     showUploadList: false,
     beforeUpload: (file, fileList) => {
       // 处理多文件上传
@@ -39,7 +39,7 @@ function Home() {
     });
 
     try {
-      const response = await axios.post('http://localhost:5000/api/preview-batch', formData, {
+      const response = await axios.post('http://172.29.167.50:5000/api/preview-batch', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
@@ -47,6 +47,21 @@ function Home() {
         setPreviewData(response.data.data);
         setUploadPath(response.data.data.upload_paths);
         message.success(`成功解析 ${files.length} 个文件！`);
+        
+        // 检查是否有未成年人
+        if (response.data.data.minors && response.data.data.minors.length > 0) {
+          const minorNames = response.data.data.minors.map(m => `${m.name}（${m.age}岁）`).join('、');
+          Modal.warning({
+            title: '未成年人提醒',
+            content: (
+              <div>
+                <p>以下著作权人为未成年人，需注意：</p>
+                <p style={{ fontWeight: 'bold', color: '#faad14' }}>{minorNames}</p>
+                <p style={{ marginTop: 16 }}>建议由监护人代为签署协议或出具监护人同意书。</p>
+              </div>
+            ),
+          });
+        }
       } else {
         message.error(response.data.err || '解析失败');
       }
@@ -68,7 +83,7 @@ function Home() {
     setGenerating(true);
 
     try {
-      const response = await axios.post('http://localhost:5000/api/generate', {
+      const response = await axios.post('http://172.29.167.50:5000/api/generate', {
         ...previewData,
         upload_path: uploadPath,
       });
@@ -90,7 +105,7 @@ function Home() {
   // 下载文件
   const handleDownload = () => {
     if (downloadUrl) {
-      window.open(`http://localhost:5000${downloadUrl}`, '_blank');
+      window.open(`http://172.29.167.50:5000${downloadUrl}`, '_blank');
     }
   };
 
@@ -110,7 +125,7 @@ function Home() {
               <FileTextOutlined style={{ fontSize: 48, color: '#1890ff' }} />
             </p>
             <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
-            <p className="ant-upload-hint">支持 .docx 格式的软件著作权申请表</p>
+            <p className="ant-upload-hint">支持 .docx 和 .doc 格式的软件著作权申请表</p>
           </Dragger>
         </Card>
       </div>
