@@ -81,6 +81,29 @@
 - [ ] 滑块验证码自动识别优化
 - [ ] 飞书权限问题解决（需要管理员授权）
 
+### 2026-02-28
+- **协议生成器Web版更新**：
+  - ✅ 修复上传功能（优化文件拖放和点击上传逻辑）
+  - ✅ 新增 .doc 格式支持（自动转换为 .docx）
+  - ❌ .doc 转换遇到问题：PowerShell 无法找到中文路径文件
+  - 技术实现：Windows Word COM 自动化转换
+  - **问题诊断**：
+    - `wslpath -w` 转换路径正确：`/mnt/d/桌面/test_doc.doc` → `D:\桌面\test_doc.doc`
+    - 但 PowerShell 执行时报告"找不到文件"
+    - 可能原因：中文路径编码问题 / Word COM 对象权限问题
+  - **待解决**：
+    1. 测试纯英文路径是否正常
+    2. 尝试使用 PowerShell `-Encoding UTF8` 参数
+    3. 备选方案：使用 LibreOffice 命令行转换
+  - 文件修改：
+    - backend/app.py：添加 `convert_doc_to_docx()` 函数
+    - frontend/src/pages/Home.js：accept 属性添加 .doc
+  - Git 提交：已推送到 GitHub
+  - **服务地址**：
+    - 前端：http://172.29.167.50:3000（WSL2 IP）
+    - 后端：http://172.29.167.50:5000
+  - **注意**：代理软件（Privoxy）会拦截请求，需要关闭或添加例外
+
 ## 技术栈
 - 运行环境：WSL2 (Ubuntu 22.04 on Windows)
 - 浏览器自动化：Selenium + ChromeDriver / Browser-use
