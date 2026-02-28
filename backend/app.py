@@ -50,6 +50,87 @@ def health_check():
     return jsonify({"status": "ok", "message": "服务运行正常"})
 
 
+@app.route("/api/preview-batch", methods=["POST"])
+def preview_batch():
+    """
+    批量预览提取的信息
+
+    接收多个 .docx 文件，返回所有提取的软件信息
+    """
+    # 检查文件
+    if "files" not in request.files:
+        return jsonify({"ok": False, "err": "没有上传文件"}), 400
+
+    files = request.files.getlist("files")
+
+    if not files or all(f.filename == "" for f in files):
+        return jsonify({"ok": False, "err": "没有选择文件"}), 400
+
+    # 过滤有效文件
+    valid_files = [f for f in files if f.filename and allowed_file(f.filename)]
+    
+    if not valid_files:
+        return jsonify({"ok": False, "err": "没有有效的 .docx 文件"}), 400
+
+    try:
+        all_software = []
+        all_owners = []
+        upload_paths = []
+        
+        for file in valid_files:
+            # 保存上传文件
+            filename = secure_filename(file.filename)
+            timestamp = str(int(os.times().elapsed * 1000))
+            upload_path = os.path.join(UPLOAD_DIR, f"{timestamp}_{filename}")
+            file.save(upload_path)
+            upload_paths.append(upload_path)
+            
+            # 提取信息
+            software_list = extract_info(upload_path)
+            
+            if software_list:
+                # 添加文件来源信息
+                for sw in software_list:
+                    sw["source_file"] = filename
+                all_software.extend(software_list)
+                
+                # 合并著作权人（去重）
+                if software_list[0].get("owners"):
+                    for owner in software_list[0]["owners"]:
+                        if owner not in all_owners:
+                            all_owners.append(owner)
+
+        if not all_software:
+            return jsonify({"ok": False, "err": "无法提取软件信息"}), 400
+
+        # 返回提取的信息
+        result = {
+            "ok": True,
+            "data": {
+                "file_count": len(valid_files),
+                "software_count": len(all_software),
+                "software_list": [
+                    {
+                        "software_name": sw["name"],
+                        "software_version": sw["version"],
+                        "dev_date": sw["date"],
+                        "agreement_date": calc_agreement_date(sw["date"]),
+                        "source_file": sw.get("source_file", ""),
+                    }
+                    for sw in all_software
+                ],
+                "owners_count": len(all_owners),
+                "owners": all_owners,
+                "upload_paths": upload_paths,
+            },
+        }
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"ok": False, "err": f"处理失败: {str(e)}"}), 500
+
+
 @app.route("/api/preview", methods=["POST"])
 def preview():
     """
@@ -119,16 +200,36 @@ def generate():
     try:
         data = request.json
 
-        # 获取上传文件路径
-        upload_path = data.get("upload_path")
-        if not upload_path or not os.path.exists(upload_path):
+        # 支持批量处理
+        upload_paths = data.get("upload_paths", [])
+        if isinstance(upload_paths, str):
+            upload_paths = [upload_paths]
+        
+        if not upload_paths:
+            return jsonify({"ok": False, "err": "没有上传文件"}), 400
+        
+        # 验证文件存在
+        valid_paths = [p for p in upload_paths if os.path.exists(p)]
+        if not valid_paths:
             return jsonify({"ok": False, "err": "上传文件不存在，请重新上传"}), 400
 
-        # 生成协议
-        result = generate_agreement(upload_path, TEMPLATE_DIR, OUTPUT_DIR)
+        # 批量生成协议
+        all_output_files = []
+        all_software_list = []
+        
+        for upload_path in valid_paths:
+            result = generate_agreement(upload_path, TEMPLATE_DIR, OUTPUT_DIR)
+            
+            if result["ok"]:
+                if result.get("output_files"):
+                    all_output_files.extend(result["output_files"])
+                else:
+                    all_output_files.append(result["output"])
+                
+                all_software_list.extend(result.get("software_list", []))
 
-        if not result["ok"]:
-            return jsonify(result), 400
+        if not all_output_files:
+            return jsonify({"ok": False, "err": "生成失败，没有生成任何协议"}), 400
 
         # 保存到数据库
         software_list = data.get("software_list", [])
@@ -143,39 +244,33 @@ def generate():
             owners_count=data.get("owners_count", 0),
             owners_info=json.dumps(owners_info, ensure_ascii=False),
             input_file=data.get("input_file"),
-            output_file=os.path.basename(result["output"]),
+            output_file=f"批量生成{len(all_output_files)}份协议",
         )
         db.session.add(history)
         db.session.commit()
 
+        # 打包所有生成的协议
+        import zipfile
+        
+        zip_filename = f"合作协议-批量下载-{len(all_output_files)}份.zip"
+        zip_path = os.path.join(OUTPUT_DIR, zip_filename)
+        
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file_path in all_output_files:
+                if os.path.exists(file_path):
+                    zipf.write(file_path, os.path.basename(file_path))
+        
         # 返回下载链接
         response = {
             "ok": True,
-            "output_file": os.path.basename(result["output"]),
-            "download_url": f"/api/download/{os.path.basename(result['output'])}",
+            "output_file": zip_filename,
+            "download_url": f"/api/download/{zip_filename}",
             "history_id": history.id,
-            "software_count": result.get("software_count", 1),
-            "software_list": result.get("software_list", []),
+            "software_count": len(all_software_list),
+            "software_list": all_software_list,
+            "file_count": len(all_output_files),
+            "is_zip": True,
         }
-        
-        # 如果生成了多个文件，打包成ZIP
-        if result.get("output_files") and len(result["output_files"]) > 1:
-            import zipfile
-            import tempfile
-            
-            # 创建ZIP文件
-            zip_filename = f"合作协议-批量下载-{len(result['output_files'])}份.zip"
-            zip_path = os.path.join(OUTPUT_DIR, zip_filename)
-            
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for file_path in result["output_files"]:
-                    if os.path.exists(file_path):
-                        zipf.write(file_path, os.path.basename(file_path))
-            
-            # 更新返回的下载链接为ZIP文件
-            response["download_url"] = f"/api/download/{zip_filename}"
-            response["output_file"] = zip_filename
-            response["is_zip"] = True
         
         return jsonify(response)
 

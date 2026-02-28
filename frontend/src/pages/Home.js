@@ -15,33 +15,38 @@ function Home() {
   // 上传配置
   const uploadProps = {
     name: 'file',
-    multiple: false,
+    multiple: true,
     accept: '.docx',
     showUploadList: false,
-    beforeUpload: (file) => {
-      handleUpload(file);
+    beforeUpload: (file, fileList) => {
+      // 处理多文件上传
+      handleMultipleUpload(fileList);
       return false; // 阻止自动上传
     },
   };
 
-  // 处理上传
-  const handleUpload = async (file) => {
+  // 处理多文件上传
+  const handleMultipleUpload = async (files) => {
+    if (!files || files.length === 0) return;
+
     setLoading(true);
     setPreviewData(null);
     setDownloadUrl(null);
 
     const formData = new FormData();
-    formData.append('file', file);
+    files.forEach(file => {
+      formData.append('files', file);
+    });
 
     try {
-      const response = await axios.post('http://localhost:5000/api/preview', formData, {
+      const response = await axios.post('http://localhost:5000/api/preview-batch', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       if (response.data.ok) {
         setPreviewData(response.data.data);
-        setUploadPath(response.data.data.upload_path);
-        message.success('文件解析成功！');
+        setUploadPath(response.data.data.upload_paths);
+        message.success(`成功解析 ${files.length} 个文件！`);
       } else {
         message.error(response.data.err || '解析失败');
       }
