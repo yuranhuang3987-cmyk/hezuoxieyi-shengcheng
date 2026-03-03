@@ -117,6 +117,22 @@ function Home() {
     }
   };
 
+  // 阻止浏览器默认拖放行为
+  React.useEffect(() => {
+    const preventDefaults = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    
+    window.addEventListener('dragover', preventDefaults);
+    window.addEventListener('drop', preventDefaults);
+    
+    return () => {
+      window.removeEventListener('dragover', preventDefaults);
+      window.removeEventListener('drop', preventDefaults);
+    };
+  }, []);
+
   // 重置
   const handleReset = () => {
     setPreviewData(null);
