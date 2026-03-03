@@ -104,8 +104,6 @@ def extract_info(file_path):
                                         return False
                                 
                                 # 4. 身份证号有效性检查
-                                # 前6位：地区码（必须是有效的行政区划代码）
-                                # 中间8位：出生日期（必须是有效日期）
                                 try:
                                     # 检查出生日期是否有效
                                     birth_year = int(id_number[6:10])
@@ -113,25 +111,18 @@ def extract_info(file_path):
                                     birth_day = int(id_number[12:14])
                                     
                                     # 日期范围检查
-                                    if birth_year < 1900 or birth_year > 2030:
+                                    if birth_year < 1950 or birth_year > 2030:
                                         return False
                                     if birth_month < 1 or birth_month > 12:
                                         return False
                                     if birth_day < 1 or birth_day > 31:
                                         return False
                                     
-                                    # 统一社会信用代码的特征：
-                                    # 第1位是登记管理部门代码：1=机构编制, 5=民政, 9=工商, Y=其他
-                                    # 如果第1位是9或5，通常是企业/组织，不是个人
-                                    first_char = id_number[0]
-                                    if first_char in ['5', '9', 'Y', 'y']:
-                                        return False
-                                    
                                 except (ValueError, IndexError):
                                     return False
                                 
-                                # 5. 校验码验证（可选，更严格）
-                                # 身份证最后一位是校验码，可以通过算法验证
+                                # 5. 校验码验证（身份证专用算法）
+                                # 这是区分身份证和统一社会信用代码的关键
                                 try:
                                     weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2]
                                     check_codes = ['1', '0', 'X', '9', '8', '7', '6', '5', '4', '3', '2']
