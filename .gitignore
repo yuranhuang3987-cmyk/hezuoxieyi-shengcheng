@@ -54,3 +54,21 @@ logs/
 tmp/
 temp/
 *.tmp
+
+# OpenClaw workspace files
+AGENTS.md
+HEARTBEAT.md
+IDENTITY.md
+MEMORY.md
+SOUL.md
+TOOLS.md
+USER.md
+.openclaw/
+
+# Research/notes
+memory/
+*_调研报告*.md
+*_指南*.md
+*_方案*.md
+*_分析*.md
+*_状态*.md
