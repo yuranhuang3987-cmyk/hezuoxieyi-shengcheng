@@ -47,6 +47,7 @@ function Home() {
     try {
       const response = await axios.post('http://localhost:5000/api/preview-batch', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        withCredentials: true,
       });
 
       if (response.data.ok) {
@@ -93,7 +94,7 @@ function Home() {
         ...previewData,
         upload_path: uploadPath,
         custom_agreement_date: customAgreementDate ? customAgreementDate.format('YYYY-MM-DD') : null,
-      });
+      }, { withCredentials: true });
 
       if (response.data.ok) {
         setDownloadUrl(response.data.download_url);

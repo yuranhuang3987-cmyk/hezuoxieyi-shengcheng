@@ -24,6 +24,7 @@ function History() {
     try {
       const response = await axios.get('http://localhost:5000/api/history', {
         params: { page, per_page: pageSize },
+        withCredentials: true,
       });
 
       if (response.data.ok) {
@@ -47,7 +48,7 @@ function History() {
   // 查看详情
   const handleViewDetail = async (id) => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/history/${id}`);
+      const response = await axios.get(`http://localhost:5000/api/history/${id}`, { withCredentials: true });
       if (response.data.ok) {
         setCurrentDetail(response.data.data);
         setDetailVisible(true);
@@ -68,7 +69,7 @@ function History() {
   // 删除记录
   const handleDelete = async (id) => {
     try {
-      const response = await axios.delete(`http://localhost:5000/api/history/${id}`);
+      const response = await axios.delete(`http://localhost:5000/api/history/${id}`, { withCredentials: true });
       if (response.data.ok) {
         message.success('删除成功');
         loadHistory(pagination.current, pagination.pageSize);

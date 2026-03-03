@@ -5,11 +5,48 @@ import os
 import json
 import subprocess
 import time
-from flask import Flask, request, jsonify, send_file, send_from_directory
+import secrets
+from functools import wraps
+from flask import Flask, request, jsonify, send_file, send_from_directory, session, g
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
-from models import db, History
+from models import db, User, History
 from utils import extract_info, calc_agreement_date, generate_agreement, check_minor_owners
+
+
+# 认证装饰器
+def login_required(f):
+    """需要登录"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user_id = session.get("user_id")
+        if not user_id:
+            return jsonify({"ok": False, "err": "请先登录", "need_login": True}), 401
+        user = User.query.get(user_id)
+        if not user:
+            session.pop("user_id", None)
+            return jsonify({"ok": False, "err": "用户不存在", "need_login": True}), 401
+        g.current_user = user
+        return f(*args, **kwargs)
+    return decorated
+
+
+def admin_required(f):
+    """需要管理员权限"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user_id = session.get("user_id")
+        if not user_id:
+            return jsonify({"ok": False, "err": "请先登录", "need_login": True}), 401
+        user = User.query.get(user_id)
+        if not user:
+            session.pop("user_id", None)
+            return jsonify({"ok": False, "err": "用户不存在", "need_login": True}), 401
+        if user.role != "admin":
+            return jsonify({"ok": False, "err": "需要管理员权限"}), 403
+        g.current_user = user
+        return f(*args, **kwargs)
+    return decorated
 
 
 def convert_doc_to_docx(doc_path):
@@ -97,7 +134,10 @@ try {{
 
 # 配置
 app = Flask(__name__)
-CORS(app)  # 允许跨域
+app.secret_key = secrets.token_hex(32)  # Session 密钥
+
+# CORS 配置（支持 credentials）
+CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
 
 # 基础目录
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -120,6 +160,7 @@ app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 最大 16MB
 db.init_app(app)
 with app.app_context():
     db.create_all()
+    User.create_admin()  # 创建默认管理员
 
 # 允许的文件扩展名
 ALLOWED_EXTENSIONS = {"docx", "doc"}
@@ -136,7 +177,133 @@ def health_check():
     return jsonify({"status": "ok", "message": "服务运行正常"})
 
 
+# ==================== 用户认证 API ====================
+
+@app.route("/api/login", methods=["POST"])
+def login():
+    """用户登录"""
+    data = request.json
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
+
+    if not username or not password:
+        return jsonify({"ok": False, "err": "用户名和密码不能为空"}), 400
+
+    user = User.query.filter_by(username=username).first()
+    if not user or not user.check_password(password):
+        return jsonify({"ok": False, "err": "用户名或密码错误"}), 401
+
+    session["user_id"] = user.id
+    return jsonify({
+        "ok": True,
+        "data": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+        }
+    })
+
+
+@app.route("/api/logout", methods=["POST"])
+def logout():
+    """用户登出"""
+    session.pop("user_id", None)
+    return jsonify({"ok": True, "message": "已登出"})
+
+
+@app.route("/api/me", methods=["GET"])
+@login_required
+def get_current_user():
+    """获取当前登录用户"""
+    return jsonify({
+        "ok": True,
+        "data": {
+            "id": g.current_user.id,
+            "username": g.current_user.username,
+            "role": g.current_user.role,
+        }
+    })
+
+
+# ==================== 用户管理 API（管理员专用）====================
+
+@app.route("/api/users", methods=["GET"])
+@admin_required
+def list_users():
+    """获取用户列表"""
+    users = User.query.order_by(User.created_at.desc()).all()
+    return jsonify({
+        "ok": True,
+        "data": [u.to_dict() for u in users]
+    })
+
+
+@app.route("/api/users", methods=["POST"])
+@admin_required
+def create_user():
+    """创建用户"""
+    data = request.json
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
+    role = data.get("role", "user")
+
+    if not username or not password:
+        return jsonify({"ok": False, "err": "用户名和密码不能为空"}), 400
+
+    if role not in ["admin", "user"]:
+        return jsonify({"ok": False, "err": "角色只能是 admin 或 user"}), 400
+
+    # 检查用户名是否已存在
+    if User.query.filter_by(username=username).first():
+        return jsonify({"ok": False, "err": "用户名已存在"}), 400
+
+    user = User(username=username, role=role)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+
+    return jsonify({"ok": True, "data": user.to_dict()})
+
+
+@app.route("/api/users/<int:user_id>", methods=["DELETE"])
+@admin_required
+def delete_user(user_id):
+    """删除用户"""
+    if user_id == g.current_user.id:
+        return jsonify({"ok": False, "err": "不能删除自己"}), 400
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"ok": False, "err": "用户不存在"}), 404
+
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({"ok": True, "message": "删除成功"})
+
+
+@app.route("/api/users/<int:user_id>/reset-password", methods=["POST"])
+@admin_required
+def reset_user_password(user_id):
+    """重置用户密码"""
+    data = request.json
+    new_password = data.get("password", "")
+
+    if not new_password:
+        return jsonify({"ok": False, "err": "密码不能为空"}), 400
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"ok": False, "err": "用户不存在"}), 404
+
+    user.set_password(new_password)
+    db.session.commit()
+    return jsonify({"ok": True, "message": "密码已重置"})
+
+
+# ==================== 协议生成 API ====================
+
 @app.route("/api/preview-batch", methods=["POST"])
+@login_required
 def preview_batch():
     """
     批量预览提取的信息
@@ -302,6 +469,7 @@ def preview():
 
 
 @app.route("/api/generate", methods=["POST"])
+@login_required
 def generate():
     """
     生成合作协议
@@ -351,6 +519,7 @@ def generate():
         owners_info = data.get("owners", [])
         
         history = History(
+            user_id=g.current_user.id,  # 关联当前用户
             software_name=first_software.get("software_name", ""),
             software_version=first_software.get("software_version", "V1.0"),
             dev_date=first_software.get("dev_date", ""),
@@ -407,8 +576,9 @@ def download(filename):
 
 
 @app.route("/api/history", methods=["GET"])
+@admin_required
 def get_history():
-    """获取历史记录列表"""
+    """获取历史记录列表（仅管理员）"""
     try:
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 20, type=int)
@@ -418,11 +588,18 @@ def get_history():
             .paginate(page=page, per_page=per_page, error_out=False)
         )
 
+        # 添加用户名信息
+        items = []
+        for item in pagination.items:
+            data = item.to_dict()
+            data["username"] = item.user.username if item.user else "未知"
+            items.append(data)
+
         return jsonify(
             {
                 "ok": True,
                 "data": {
-                    "items": [item.to_dict() for item in pagination.items],
+                    "items": items,
                     "total": pagination.total,
                     "page": page,
                     "per_page": per_page,
@@ -436,20 +613,24 @@ def get_history():
 
 
 @app.route("/api/history/<int:history_id>", methods=["GET"])
+@admin_required
 def get_history_detail(history_id):
-    """获取单条历史记录详情"""
+    """获取单条历史记录详情（仅管理员）"""
     try:
         history = History.query.get(history_id)
         if not history:
             return jsonify({"ok": False, "err": "记录不存在"}), 404
 
-        return jsonify({"ok": True, "data": history.to_dict()})
+        data = history.to_dict()
+        data["username"] = history.user.username if history.user else "未知"
+        return jsonify({"ok": True, "data": data})
 
     except Exception as e:
         return jsonify({"ok": False, "err": f"查询失败: {str(e)}"}), 500
 
 
 @app.route("/api/history/<int:history_id>", methods=["DELETE"])
+@admin_required
 def delete_history(history_id):
     """删除历史记录"""
     try:
