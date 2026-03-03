@@ -82,23 +82,73 @@ def extract_info(file_path):
                             # 跳过标题行（增强过滤）
                             if any(keyword in row[0] for keyword in ["公司", "营业执照", "申请人", "详细地址", "邮政编码"]):
                                 continue
-                            idn = row[1] if len(row) > 1 else ""
-                            # 判断是否为个人
-                            # 1. 身份证号必须是18位
-                            # 2. 名称不能包含单位关键词
-                            unit_keywords = ["公司", "大学", "学院", "学校", "医院", "研究所", "研究院", "中心", "集团", "企业", "有限", "股份", "合伙"]
-                            is_person = bool(re.match(r"^\d{17}[\dXx]$", idn.strip()))
-                            if is_person:
-                                # 如果名称包含单位关键词，则不是个人
+                            idn = row[1].strip() if len(row) > 1 else ""
+                            
+                            # 判断是否为个人（综合判断）
+                            def is_personal_id(name, id_number):
+                                """判断是否为个人身份证号"""
+                                # 1. 长度必须是18位
+                                if len(id_number) != 18:
+                                    return False
+                                
+                                # 2. 格式检查：前17位数字，最后一位数字或X
+                                if not re.match(r"^\d{17}[\dXx]$", id_number):
+                                    return False
+                                
+                                # 3. 单位关键词检查（名称包含这些词则不是个人）
+                                unit_keywords = ["公司", "大学", "学院", "学校", "医院", "研究所", 
+                                               "研究院", "中心", "集团", "企业", "有限", "股份", 
+                                               "合伙", "事务所", "协会", "基金会", "合作社"]
                                 for kw in unit_keywords:
-                                    if kw in row[0]:
-                                        is_person = False
-                                        break
+                                    if kw in name:
+                                        return False
+                                
+                                # 4. 身份证号有效性检查
+                                # 前6位：地区码（必须是有效的行政区划代码）
+                                # 中间8位：出生日期（必须是有效日期）
+                                try:
+                                    # 检查出生日期是否有效
+                                    birth_year = int(id_number[6:10])
+                                    birth_month = int(id_number[10:12])
+                                    birth_day = int(id_number[12:14])
+                                    
+                                    # 日期范围检查
+                                    if birth_year < 1900 or birth_year > 2030:
+                                        return False
+                                    if birth_month < 1 or birth_month > 12:
+                                        return False
+                                    if birth_day < 1 or birth_day > 31:
+                                        return False
+                                    
+                                    # 统一社会信用代码的特征：
+                                    # 第1位是登记管理部门代码：1=机构编制, 5=民政, 9=工商, Y=其他
+                                    # 如果第1位是9或5，通常是企业/组织，不是个人
+                                    first_char = id_number[0]
+                                    if first_char in ['5', '9', 'Y', 'y']:
+                                        return False
+                                    
+                                except (ValueError, IndexError):
+                                    return False
+                                
+                                # 5. 校验码验证（可选，更严格）
+                                # 身份证最后一位是校验码，可以通过算法验证
+                                try:
+                                    weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2]
+                                    check_codes = ['1', '0', 'X', '9', '8', '7', '6', '5', '4', '3', '2']
+                                    total = sum(int(id_number[i]) * weights[i] for i in range(17))
+                                    check_code = check_codes[total % 11]
+                                    if id_number[-1].upper() != check_code:
+                                        return False
+                                except (ValueError, IndexError):
+                                    return False
+                                
+                                return True
+                            
                             owners.append(
                                 {
                                     "name": row[0],
-                                    "idn": idn.strip(),
-                                    "is_person": is_person,
+                                    "idn": idn,
+                                    "is_person": is_personal_id(row[0], idn),
                                 }
                             )
                         break
