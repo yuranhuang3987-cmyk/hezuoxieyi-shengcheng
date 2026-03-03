@@ -87,7 +87,7 @@ function AppLayout({ user, onLogout }) {
       </Content>
 
       <Footer style={{ textAlign: 'center', color: '#999' }}>
-        软件著作权合作协议生成器 © 2026
+        技术联系微信：H50799549
       </Footer>
     </Layout>
   );
