@@ -3,6 +3,8 @@ import { Upload, Button, Card, message, Spin, Descriptions, Tag, Divider, Space,
 import { UploadOutlined, FileTextOutlined, DownloadOutlined, ReloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
+import 'dayjs/locale/zh-cn';
+dayjs.locale('zh-cn');
 import zhCN from 'antd/locale/zh_CN';
 
 const { Dragger } = Upload;
@@ -43,7 +45,7 @@ function Home() {
     });
 
     try {
-      const response = await axios.post('http://172.21.94.105:5000/api/preview-batch', formData, {
+      const response = await axios.post('http://localhost:5000/api/preview-batch', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
@@ -87,7 +89,7 @@ function Home() {
     setGenerating(true);
 
     try {
-      const response = await axios.post('http://172.21.94.105:5000/api/generate', {
+      const response = await axios.post('http://localhost:5000/api/generate', {
         ...previewData,
         upload_path: uploadPath,
         custom_agreement_date: customAgreementDate ? customAgreementDate.format('YYYY-MM-DD') : null,
@@ -110,7 +112,7 @@ function Home() {
   // 下载文件
   const handleDownload = () => {
     if (downloadUrl) {
-      window.open(`http://172.21.94.105:5000${downloadUrl}`, '_blank');
+      window.open(`http://localhost:5000${downloadUrl}`, '_blank');
     }
   };
 
