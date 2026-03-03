@@ -83,11 +83,22 @@ def extract_info(file_path):
                             if any(keyword in row[0] for keyword in ["公司", "营业执照", "申请人", "详细地址", "邮政编码"]):
                                 continue
                             idn = row[1] if len(row) > 1 else ""
+                            # 判断是否为个人
+                            # 1. 身份证号必须是18位
+                            # 2. 名称不能包含单位关键词
+                            unit_keywords = ["公司", "大学", "学院", "学校", "医院", "研究所", "研究院", "中心", "集团", "企业", "有限", "股份", "合伙"]
+                            is_person = bool(re.match(r"^\d{17}[\dXx]$", idn.strip()))
+                            if is_person:
+                                # 如果名称包含单位关键词，则不是个人
+                                for kw in unit_keywords:
+                                    if kw in row[0]:
+                                        is_person = False
+                                        break
                             owners.append(
                                 {
                                     "name": row[0],
-                                    "idn": idn.strip(),  # 保存身份证号码
-                                    "is_person": bool(re.match(r"^\d{17}[\dXx]$", idn.strip())),
+                                    "idn": idn.strip(),
+                                    "is_person": is_person,
                                 }
                             )
                         break
