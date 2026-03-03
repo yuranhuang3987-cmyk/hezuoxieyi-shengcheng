@@ -67,9 +67,9 @@ function AppLayout({ user, onLogout }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <UserOutlined />
           <span>{user.username}</span>
-          <span style={{ color: user.role === 'admin' ? '#f5222d' : '#1890ff', fontSize: 12 }}>
-            ({user.role === 'admin' ? '管理员' : '普通用户'})
-          </span>
+          {user.role === 'admin' && (
+            <span style={{ color: '#f5222d', fontSize: 12 }}>(管理员)</span>
+          )}
           <Button type="link" icon={<LogoutOutlined />} onClick={onLogout}>
             登出
           </Button>

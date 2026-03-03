@@ -532,7 +532,23 @@ def generate():
         db.session.add(history)
         db.session.commit()
 
-        # 打包所有生成的协议
+        # 如果只有1份协议，直接返回docx文件
+        if len(all_output_files) == 1:
+            output_file = all_output_files[0]
+            filename = os.path.basename(output_file)
+            response = {
+                "ok": True,
+                "output_file": filename,
+                "download_url": f"/api/download/{filename}",
+                "history_id": history.id,
+                "software_count": len(all_software_list),
+                "software_list": all_software_list,
+                "file_count": 1,
+                "is_zip": False,
+            }
+            return jsonify(response)
+
+        # 多份协议：打包zip
         import zipfile
         
         zip_filename = f"合作协议-批量下载-{len(all_output_files)}份.zip"
