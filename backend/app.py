@@ -324,12 +324,15 @@ def generate():
         if not valid_paths:
             return jsonify({"ok": False, "err": "上传文件不存在，请重新上传"}), 400
 
+        # 接收自定义协议签署日期
+        custom_agreement_date = data.get("custom_agreement_date")
+        
         # 批量生成协议
         all_output_files = []
         all_software_list = []
         
         for upload_path in valid_paths:
-            result = generate_agreement(upload_path, TEMPLATE_DIR, OUTPUT_DIR)
+            result = generate_agreement(upload_path, TEMPLATE_DIR, OUTPUT_DIR, custom_agreement_date)
             
             if result["ok"]:
                 if result.get("output_files"):

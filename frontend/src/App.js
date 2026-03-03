@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
-import { Layout, Menu, Typography } from 'antd';
+import { Layout, Menu, Typography, ConfigProvider, theme } from 'antd';
+import zhCN from 'antd/locale/zh_CN';
 import { FileTextOutlined, HistoryOutlined } from '@ant-design/icons';
 import Home from './pages/Home';
 import History from './pages/History';
@@ -58,9 +59,11 @@ function AppLayout() {
 
 function App() {
   return (
-    <Router>
-      <AppLayout />
-    </Router>
+    <ConfigProvider locale={zhCN}>
+      <Router>
+        <AppLayout />
+      </Router>
+    </ConfigProvider>
   );
 }
 

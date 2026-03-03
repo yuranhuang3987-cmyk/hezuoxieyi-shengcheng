@@ -22,7 +22,7 @@ function History() {
   const loadHistory = async (page, pageSize) => {
     setLoading(true);
     try {
-      const response = await axios.get('http://172.29.167.50:5000/api/history', {
+      const response = await axios.get('http://172.21.94.105:5000/api/history', {
         params: { page, per_page: pageSize },
       });
 
@@ -47,7 +47,7 @@ function History() {
   // 查看详情
   const handleViewDetail = async (id) => {
     try {
-      const response = await axios.get(`http://172.29.167.50:5000/api/history/${id}`);
+      const response = await axios.get(`http://172.21.94.105:5000/api/history/${id}`);
       if (response.data.ok) {
         setCurrentDetail(response.data.data);
         setDetailVisible(true);
@@ -62,13 +62,13 @@ function History() {
 
   // 下载文件
   const handleDownload = (outputFile) => {
-    window.open(`http://172.29.167.50:5000/api/download/${outputFile}`, '_blank');
+    window.open(`http://172.21.94.105:5000/api/download/${outputFile}`, '_blank');
   };
 
   // 删除记录
   const handleDelete = async (id) => {
     try {
-      const response = await axios.delete(`http://172.29.167.50:5000/api/history/${id}`);
+      const response = await axios.delete(`http://172.21.94.105:5000/api/history/${id}`);
       if (response.data.ok) {
         message.success('删除成功');
         loadHistory(pagination.current, pagination.pageSize);

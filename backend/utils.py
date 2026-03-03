@@ -100,16 +100,54 @@ def extract_info(file_path):
     return software_list if software_list else []
 
 
-def calc_agreement_date(dev_date):
+def format_date(date_str):
+    """
+    将日期转换为中文格式（2025年1月1日）
+    
+    Args:
+        date_str: 日期字符串（支持 2025-01-01, 2025/01/01, 2025年1月1日 等格式）
+    
+    Returns:
+        str: 中文格式日期
+    """
+    try:
+        # 已经是中文格式
+        if "年" in date_str:
+            return date_str
+        
+        # 处理横杠或斜杠格式
+        if "-" in date_str:
+            parts = date_str.split("-")
+        elif "/" in date_str:
+            parts = date_str.split("/")
+        else:
+            return date_str
+        
+        if len(parts) >= 3:
+            y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+            return f"{y}年{m}月{d}日"
+    except:
+        pass
+    return date_str
+
+
+def calc_agreement_date(dev_date, custom_date=None):
     """
     根据开发完成日期计算协议签署日期（提前3个月）
+    如果传入自定义日期，则直接使用自定义日期
 
     Args:
         dev_date: 开发完成日期（支持多种格式）
+        custom_date: 自定义协议签署日期（可选，格式：2025年1月1日 或 2025-01-01）
 
     Returns:
         str: 协议签署日期
     """
+    # 如果有自定义日期，直接使用
+    if custom_date:
+        return format_date(custom_date)
+    
+    # 否则根据开发完成日期计算（提前3个月）
     try:
         # 处理多种日期格式
         if "年" in dev_date:
@@ -307,7 +345,7 @@ def add_signature(doc, owners):
                     p.append(nr)
 
 
-def generate_agreement(app_file_path, template_dir, output_dir):
+def generate_agreement(app_file_path, template_dir, output_dir, custom_agreement_date=None):
     """
     生成合作协议（支持多个软件，生成在一个文档中）
 
@@ -315,6 +353,7 @@ def generate_agreement(app_file_path, template_dir, output_dir):
         app_file_path: 申请表文件路径
         template_dir: 模板目录
         output_dir: 输出目录
+        custom_agreement_date: 自定义协议签署日期（可选）
 
     Returns:
         dict: {"ok": True, "output": "输出文件路径"} 或 {"ok": False, "err": "错误信息"}
@@ -390,7 +429,7 @@ def generate_agreement(app_file_path, template_dir, output_dir):
         
         # 准备替换内容
         software_full = f"{software_info['name']}{software_info['version']}"
-        agreement_date = calc_agreement_date(software_info["date"])
+        agreement_date = calc_agreement_date(software_info["date"], custom_agreement_date)
 
         # 构建替换列表（使用模板中的实际占位符）
         reps = []

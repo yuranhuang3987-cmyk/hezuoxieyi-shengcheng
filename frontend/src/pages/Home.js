@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { Upload, Button, Card, message, Spin, Descriptions, Tag, Divider, Space, Modal } from 'antd';
+import { Upload, Button, Card, message, Spin, Descriptions, Tag, Divider, Space, Modal, DatePicker } from 'antd';
 import { UploadOutlined, FileTextOutlined, DownloadOutlined, ReloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import axios from 'axios';
+import dayjs from 'dayjs';
+import zhCN from 'antd/locale/zh_CN';
 
 const { Dragger } = Upload;
+const { RangePicker } = DatePicker;
 
 function Home() {
   const [loading, setLoading] = useState(false);
@@ -11,6 +14,7 @@ function Home() {
   const [uploadPath, setUploadPath] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState(null);
+  const [customAgreementDate, setCustomAgreementDate] = useState(null);
 
   // 上传配置
   const uploadProps = {
@@ -39,7 +43,7 @@ function Home() {
     });
 
     try {
-      const response = await axios.post('http://172.29.167.50:5000/api/preview-batch', formData, {
+      const response = await axios.post('http://172.21.94.105:5000/api/preview-batch', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
@@ -83,9 +87,10 @@ function Home() {
     setGenerating(true);
 
     try {
-      const response = await axios.post('http://172.29.167.50:5000/api/generate', {
+      const response = await axios.post('http://172.21.94.105:5000/api/generate', {
         ...previewData,
         upload_path: uploadPath,
+        custom_agreement_date: customAgreementDate ? customAgreementDate.format('YYYY-MM-DD') : null,
       });
 
       if (response.data.ok) {
@@ -105,7 +110,7 @@ function Home() {
   // 下载文件
   const handleDownload = () => {
     if (downloadUrl) {
-      window.open(`http://172.29.167.50:5000${downloadUrl}`, '_blank');
+      window.open(`http://172.21.94.105:5000${downloadUrl}`, '_blank');
     }
   };
 
@@ -161,7 +166,22 @@ function Home() {
                         <Tag color="blue">{previewData.owners_count} 人</Tag>
                       </Descriptions.Item>
                       <Descriptions.Item label="开发完成日期">{previewData.software_list[0].dev_date}</Descriptions.Item>
-                      <Descriptions.Item label="协议签署日期">{previewData.software_list[0].agreement_date}</Descriptions.Item>
+                      <Descriptions.Item label="协议签署日期">
+                        <Space>
+                          <span>{previewData.software_list[0].agreement_date}</span>
+                          <DatePicker 
+                            placeholder="自定义日期" 
+                            value={customAgreementDate}
+                            onChange={(date) => setCustomAgreementDate(date)}
+                            style={{ marginLeft: 8 }}
+                          />
+                          {customAgreementDate && (
+                            <a onClick={() => setCustomAgreementDate(null)} style={{ fontSize: 12 }}>
+                              恢复默认
+                            </a>
+                          )}
+                        </Space>
+                      </Descriptions.Item>
                     </>
                   ) : (
                     // 多软件：显示列表
@@ -180,6 +200,22 @@ function Home() {
                               </small>
                             </div>
                           ))}
+                          {/* 自定义日期选择器 */}
+                          <div style={{ marginTop: 12, padding: 12, background: '#fff7e6', borderRadius: 4 }}>
+                            <Space>
+                              <span>自定义协议签署日期：</span>
+                              <DatePicker 
+                                placeholder="选择日期" 
+                                value={customAgreementDate}
+                                onChange={(date) => setCustomAgreementDate(date)}
+                              />
+                              {customAgreementDate && (
+                                <a onClick={() => setCustomAgreementDate(null)} style={{ fontSize: 12 }}>
+                                  恢复默认（提前3个月）
+                                </a>
+                              )}
+                            </Space>
+                          </div>
                         </div>
                       </Descriptions.Item>
                       <Descriptions.Item label="著作权人数量" span={2}>
