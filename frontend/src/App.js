@@ -80,8 +80,22 @@ function AppLayout({ user, onLogout }) {
         <div style={{ background: '#fff', padding: 24, minHeight: 380, borderRadius: 8 }}>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/history" element={<History />} />
-            <Route path="/users" element={<UserManagement />} />
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute user={user} adminOnly={true}>
+                  <History />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users"
+              element={
+                <ProtectedRoute user={user} adminOnly={true}>
+                  <UserManagement />
+                </ProtectedRoute>
+              }
+            />
           </Routes>
         </div>
       </Content>
