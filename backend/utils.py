@@ -84,62 +84,124 @@ def extract_info(file_path):
                                 continue
                             idn = row[1].strip() if len(row) > 1 else ""
                             
-                            # 判断是否为个人（综合判断）
-                            def is_personal_id(name, id_number):
-                                """判断是否为个人身份证号"""
-                                # 1. 长度必须是18位
-                                if len(id_number) != 18:
-                                    return False
+                            # 判断是否为单位（三层过滤漏斗方案）
+                            def is_unit(name, id_code):
+                                """
+                                判断是否为单位
+                                返回: True=单位, False=个人
                                 
-                                # 2. 格式检查：前17位数字，最后一位数字或X
-                                if not re.match(r"^\d{17}[\dXx]$", id_number):
-                                    return False
+                                三层过滤逻辑：
+                                1. 名称强特征（单位关键词）
+                                2. 身份证校验码（数学验证）
+                                3. 个体户识别（业务关键词 + 名称特征）
+                                """
+                                from datetime import datetime
                                 
-                                # 3. 单位关键词检查（名称包含这些词则不是个人）
-                                unit_keywords = ["公司", "大学", "学院", "学校", "医院", "研究所", 
-                                               "研究院", "中心", "集团", "企业", "有限", "股份", 
-                                               "合伙", "事务所", "协会", "基金会", "合作社"]
-                                for kw in unit_keywords:
-                                    if kw in name:
-                                        return False
+                                name = str(name).strip()
+                                id_code = str(id_code).strip().upper()
                                 
-                                # 4. 身份证号有效性检查
+                                # === 第一层：名称强特征 ===
+                                unit_keywords = [
+                                    "公司", "有限", "股份", "集团", "企业",
+                                    "大学", "学院", "学校", "医院", "研究所", "研究院",
+                                    "中心", "协会", "基金会", "合作社", "事务所"
+                                ]
+                                if any(k in name for k in unit_keywords):
+                                    return True  # 单位
+                                
+                                # === 第二层：身份证校验码 ===
+                                # 2.1 长度检查
+                                if len(id_code) != 18:
+                                    return True  # 单位或异常
+                                
+                                # 2.2 格式检查
+                                if not re.match(r"^\d{17}[\dXx]$", id_code):
+                                    return True  # 单位
+                                
+                                # 2.3 出生日期检查
                                 try:
-                                    # 检查出生日期是否有效
-                                    birth_year = int(id_number[6:10])
-                                    birth_month = int(id_number[10:12])
-                                    birth_day = int(id_number[12:14])
-                                    
-                                    # 日期范围检查
-                                    if birth_year < 1950 or birth_year > 2030:
-                                        return False
-                                    if birth_month < 1 or birth_month > 12:
-                                        return False
-                                    if birth_day < 1 or birth_day > 31:
-                                        return False
-                                    
+                                    year = int(id_code[6:10])
+                                    month = int(id_code[10:12])
+                                    day = int(id_code[12:14])
+                                    current_year = datetime.now().year
+                                    if year < current_year - 100 or year > current_year:
+                                        return True  # 单位
+                                    if month < 1 or month > 12:
+                                        return True  # 单位
+                                    if day < 1 or day > 31:
+                                        return True  # 单位
                                 except (ValueError, IndexError):
-                                    return False
+                                    return True  # 单位
                                 
-                                # 5. 校验码验证（身份证专用算法）
-                                # 这是区分身份证和统一社会信用代码的关键
-                                try:
-                                    weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2]
-                                    check_codes = ['1', '0', 'X', '9', '8', '7', '6', '5', '4', '3', '2']
-                                    total = sum(int(id_number[i]) * weights[i] for i in range(17))
-                                    check_code = check_codes[total % 11]
-                                    if id_number[-1].upper() != check_code:
+                                # 2.4 校验码验证
+                                def is_valid_id_checksum(code):
+                                    """身份证校验码验证（Mod 11-2）"""
+                                    try:
+                                        weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2]
+                                        check_codes = ['1', '0', 'X', '9', '8', '7', '6', '5', '4', '3', '2']
+                                        total = sum(int(code[i]) * weights[i] for i in range(17))
+                                        return code[-1].upper() == check_codes[total % 11]
+                                    except (ValueError, IndexError):
                                         return False
-                                except (ValueError, IndexError):
-                                    return False
                                 
-                                return True
+                                def is_valid_uscc_checksum(code):
+                                    """统一社会信用代码校验码验证（Mod 31）"""
+                                    try:
+                                        weights = [1, 3, 9, 27, 19, 26, 16, 17, 20, 29, 25, 13, 8, 24, 10, 30, 28]
+                                        chars = "0123456789ABCDEFGHJKLMNPQRTUWXY"
+                                        total = sum(chars.index(code[i]) * weights[i] for i in range(17))
+                                        check_code = chars[(31 - total % 31) % 31]
+                                        return code[-1] == check_code
+                                    except (ValueError, IndexError):
+                                        return False
+                                
+                                if is_valid_id_checksum(id_code):
+                                    # 校验码正确 → 可能是个人，也可能是个体户
+                                    # 进入第三层判断
+                                    pass
+                                else:
+                                    # 校验码错误
+                                    # 判断是否为统一社会信用代码（首位9）
+                                    if id_code[0] == '9' and is_valid_uscc_checksum(id_code):
+                                        return True  # 单位（企业信用代码）
+                                    else:
+                                        # 校验码错误，但不是信用代码
+                                        # 可能是身份证填写错误，判断名称特征
+                                        def is_chinese_name(n):
+                                            """判断是否为中文姓名（2-20个汉字，可包含·）"""
+                                            n_clean = n.replace('·', '')
+                                            if len(n_clean) < 2 or len(n_clean) > 20:
+                                                return False
+                                            return bool(re.match(r'^[\u4e00-\u9fa5]+$', n_clean))
+                                        
+                                        if is_chinese_name(name):
+                                            return False  # 个人（身份证填错了但名称像个人）
+                                        else:
+                                            return True  # 单位
+                                
+                                # === 第三层：个体户识别 ===
+                                business_keywords = ["经营部", "工作室", "坊", "店", "行", "厂", "摊", "馆", "社"]
+                                if any(k in name for k in business_keywords):
+                                    return True  # 个体户（按单位处理）
+                                
+                                # 名称长度判断
+                                def is_chinese_name(n):
+                                    """判断是否为中文姓名"""
+                                    n_clean = n.replace('·', '')
+                                    if len(n_clean) < 2 or len(n_clean) > 20:
+                                        return False
+                                    return bool(re.match(r'^[\u4e00-\u9fa5]+$', n_clean))
+                                
+                                if is_chinese_name(name):
+                                    return False  # 个人
+                                else:
+                                    return True  # 单位
                             
                             owners.append(
                                 {
                                     "name": row[0],
                                     "idn": idn,
-                                    "is_person": is_personal_id(row[0], idn),
+                                    "is_person": not is_unit(row[0], idn),  # 取反：单位→False，个人→True
                                 }
                             )
                         break
