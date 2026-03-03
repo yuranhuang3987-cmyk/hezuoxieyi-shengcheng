@@ -14,7 +14,7 @@ FROM python:3.11-slim AS backend-builder
 
 WORKDIR /app/backend
 COPY backend/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt gunicorn
 
 # 阶段3：最终镜像
 FROM python:3.11-slim
