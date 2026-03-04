@@ -22,7 +22,7 @@ function History() {
   const loadHistory = async (page, pageSize) => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:5000/api/history', {
+      const response = await axios.get('/api/history', {
         params: { page, per_page: pageSize },
         withCredentials: true,
       });
@@ -48,7 +48,7 @@ function History() {
   // 查看详情
   const handleViewDetail = async (id) => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/history/${id}`, { withCredentials: true });
+      const response = await axios.get(`/api/history/${id}`, { withCredentials: true });
       if (response.data.ok) {
         setCurrentDetail(response.data.data);
         setDetailVisible(true);
@@ -63,13 +63,13 @@ function History() {
 
   // 下载文件
   const handleDownload = (outputFile) => {
-    window.open(`http://localhost:5000/api/download/${outputFile}`, '_blank');
+    window.open(`/api/download/${outputFile}`, '_blank');
   };
 
   // 删除记录
   const handleDelete = async (id) => {
     try {
-      const response = await axios.delete(`http://localhost:5000/api/history/${id}`, { withCredentials: true });
+      const response = await axios.delete(`/api/history/${id}`, { withCredentials: true });
       if (response.data.ok) {
         message.success('删除成功');
         loadHistory(pagination.current, pagination.pageSize);

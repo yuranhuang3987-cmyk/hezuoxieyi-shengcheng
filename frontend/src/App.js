@@ -118,7 +118,7 @@ function App() {
 
   const checkAuth = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/me', { withCredentials: true });
+      const response = await axios.get('/api/me', { withCredentials: true });
       if (response.data.ok) {
         setUser(response.data.data);
       }
@@ -135,7 +135,7 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      await axios.post('http://localhost:5000/api/logout', {}, { withCredentials: true });
+      await axios.post('/api/logout', {}, { withCredentials: true });
     } catch (error) {
       // ignore
     }

@@ -19,7 +19,7 @@ function UserManagement() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:5000/api/users', { withCredentials: true });
+      const response = await axios.get('/api/users', { withCredentials: true });
       if (response.data.ok) {
         setUsers(response.data.data);
       }
@@ -32,7 +32,7 @@ function UserManagement() {
 
   const handleCreate = async (values) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/users', values, { withCredentials: true });
+      const response = await axios.post('/api/users', values, { withCredentials: true });
       if (response.data.ok) {
         message.success('创建成功');
         setModalVisible(false);
@@ -46,7 +46,7 @@ function UserManagement() {
 
   const handleDelete = async (userId) => {
     try {
-      const response = await axios.delete(`http://localhost:5000/api/users/${userId}`, { withCredentials: true });
+      const response = await axios.delete(`/api/users/${userId}`, { withCredentials: true });
       if (response.data.ok) {
         message.success('删除成功');
         fetchUsers();
@@ -59,7 +59,7 @@ function UserManagement() {
   const handleResetPassword = async (values) => {
     try {
       const response = await axios.post(
-        `http://localhost:5000/api/users/${selectedUser.id}/reset-password`,
+        `/api/users/${selectedUser.id}/reset-password`,
         { password: values.password },
         { withCredentials: true }
       );

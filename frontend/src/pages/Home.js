@@ -45,7 +45,7 @@ function Home() {
     });
 
     try {
-      const response = await axios.post('http://localhost:5000/api/preview-batch', formData, {
+      const response = await axios.post('/api/preview-batch', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         withCredentials: true,
       });
@@ -90,9 +90,9 @@ function Home() {
     setGenerating(true);
 
     try {
-      const response = await axios.post('http://localhost:5000/api/generate', {
+      const response = await axios.post('/api/generate', {
         ...previewData,
-        upload_path: uploadPath,
+        upload_paths: uploadPath,
         custom_agreement_date: customAgreementDate ? customAgreementDate.format('YYYY-MM-DD') : null,
       }, { withCredentials: true });
 
@@ -113,7 +113,7 @@ function Home() {
   // 下载文件
   const handleDownload = () => {
     if (downloadUrl) {
-      window.open(`http://localhost:5000${downloadUrl}`, '_blank');
+      window.open(`${downloadUrl}`, '_blank');
     }
   };
 

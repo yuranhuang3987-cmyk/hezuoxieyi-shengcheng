@@ -8,6 +8,7 @@ import time
 import secrets
 from functools import wraps
 from flask import Flask, request, jsonify, send_file, send_from_directory, session, g
+from flask_session import Session
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from models import db, User, History
@@ -134,10 +135,15 @@ try {{
 
 # 配置
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(32)  # Session 密钥
+app.config["SECRET_KEY"] = "your-secret-key-change-in-production"
+
+# Session 配置（使用文件系统存储，支持多 worker）
+app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_FILE_DIR"] = "/app/backend/flask_session/"
+Session(app)
 
 # CORS 配置（支持 credentials）
-CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
+CORS(app, supports_credentials=True)
 
 # 基础目录
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -159,10 +165,12 @@ app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 最大 16MB
 # 初始化数据库
 db.init_app(app)
 with app.app_context():
-    db.create_all()
+    try:
+        db.create_all()
+    except Exception as e:
+        pass  # 表已存在，忽略
     User.create_admin()  # 创建默认管理员
 
-# 允许的文件扩展名
 ALLOWED_EXTENSIONS = {"docx", "doc"}
 
 

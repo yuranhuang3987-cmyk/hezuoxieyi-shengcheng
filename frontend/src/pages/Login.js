@@ -9,7 +9,7 @@ function Login({ onLogin }) {
   const onFinish = async (values) => {
     setLoading(true);
     try {
-      const response = await axios.post('http://localhost:5000/api/login', {
+      const response = await axios.post('/api/login', {
         username: values.username,
         password: values.password,
       }, { withCredentials: true });

@@ -37,15 +37,24 @@ class User(db.Model):
         }
 
     @staticmethod
+    @staticmethod
     def create_admin():
         """创建默认管理员"""
         admin = User.query.filter_by(username="admin").first()
         if not admin:
-            admin = User(username="admin", role="admin")
-            admin.set_password("admin123")
-            db.session.add(admin)
-            db.session.commit()
-            print("✅ 默认管理员已创建: admin / admin123")
+            try:
+                admin = User(username="admin", role="admin")
+                admin.set_password("admin123")
+                db.session.add(admin)
+                db.session.commit()
+                print("✅ 默认管理员已创建: admin / admin123")
+            except Exception as e:
+                db.session.rollback()
+                admin = User.query.filter_by(username="admin").first()
+                if admin:
+                    print("✅ 管理员已存在")
+                else:
+                    print(f"❌ 创建管理员失败: {e}")
         return admin
 
 

@@ -9,24 +9,22 @@ RUN npm install
 COPY frontend/ ./
 RUN npm run build
 
-# 阶段2：构建后端
-FROM python:3.11-slim AS backend-builder
-
-WORKDIR /app/backend
-COPY backend/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
-
-# 阶段3：最终镜像
+# 阶段2：最终镜像
 FROM python:3.11-slim
 
-# 安装 nginx
-RUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/*
+# 安装 nginx，创建用户
+RUN apt-get update && \
+    apt-get install -y nginx && \
+    rm -rf /var/lib/apt/lists/* && \
+    useradd -r -s /sbin/nologin nginx 2>/dev/null || true
 
 WORKDIR /app
 
-# 复制后端代码和依赖
-COPY --from=backend-builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+# 复制后端代码
 COPY backend/ ./backend/
+
+# 安装 Python 依赖（包括 gunicorn）
+RUN pip install --no-cache-dir -r ./backend/requirements.txt gunicorn
 
 # 复制前端构建产物
 COPY --from=frontend-builder /app/frontend/build /var/www/html
@@ -39,7 +37,7 @@ COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
 # 创建必要的目录
-RUN mkdir -p /app/backend/uploads /app/backend/outputs /app/backend/templates /app/database
+RUN mkdir -p /app/backend/uploads /app/backend/outputs /app/backend/templates /app/database /app/backend/flask_session
 
 # 暴露端口
 EXPOSE 80
