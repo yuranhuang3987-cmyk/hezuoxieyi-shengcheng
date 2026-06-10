@@ -187,8 +187,14 @@ function Home() {
                       <Descriptions.Item label="开发完成日期">{previewData.software_list[0].dev_date}</Descriptions.Item>
                       <Descriptions.Item label="协议签署日期">
                         <Space>
-                          <span>{previewData.software_list[0].agreement_date}</span>
-                          <DatePicker 
+                          {previewData.software_list[0].agreement_date ? (
+                            <span>{previewData.software_list[0].agreement_date}</span>
+                          ) : (
+                            <span style={{ color: '#cf1322' }}>
+                              ⚠ 无法识别开发完成日期，请手动指定协议日期
+                            </span>
+                          )}
+                          <DatePicker
                             placeholder="自定义日期" 
                             value={customAgreementDate}
                             onChange={(date) => setCustomAgreementDate(date)}
@@ -215,7 +221,9 @@ function Home() {
                               <strong>{index + 1}. {sw.software_name}</strong>
                               <br />
                               <small style={{ color: '#666' }}>
-                                版本: {sw.software_version} | 开发日期: {sw.dev_date} | 协议日期: {sw.agreement_date}
+                                版本: {sw.software_version} | 开发日期: {sw.dev_date} | 协议日期: {sw.agreement_date
+                                  ? sw.agreement_date
+                                  : <span style={{ color: '#cf1322' }}>⚠ 请手动指定</span>}
                               </small>
                             </div>
                           ))}

@@ -202,14 +202,10 @@ def login():
         return jsonify({"ok": False, "err": "用户名或密码错误"}), 401
 
     session["user_id"] = user.id
-    return jsonify({
-        "ok": True,
-        "data": {
-            "id": user.id,
-            "username": user.username,
-            "role": user.role,
-        }
-    })
+    data = {"id": user.id, "username": user.username}
+    if user.role == "admin":
+        data["role"] = "admin"
+    return jsonify({"ok": True, "data": data})
 
 
 @app.route("/api/logout", methods=["POST"])
@@ -223,14 +219,10 @@ def logout():
 @login_required
 def get_current_user():
     """获取当前登录用户"""
-    return jsonify({
-        "ok": True,
-        "data": {
-            "id": g.current_user.id,
-            "username": g.current_user.username,
-            "role": g.current_user.role,
-        }
-    })
+    data = {"id": g.current_user.id, "username": g.current_user.username}
+    if g.current_user.role == "admin":
+        data["role"] = "admin"
+    return jsonify({"ok": True, "data": data})
 
 
 # ==================== 用户管理 API（管理员专用）====================
@@ -509,14 +501,17 @@ def generate():
         
         for upload_path in valid_paths:
             result = generate_agreement(upload_path, TEMPLATE_DIR, OUTPUT_DIR, custom_agreement_date)
-            
-            if result["ok"]:
-                if result.get("output_files"):
-                    all_output_files.extend(result["output_files"])
-                else:
-                    all_output_files.append(result["output"])
-                
-                all_software_list.extend(result.get("software_list", []))
+
+            # 任一文件生成失败：直接返回具体错误（如无法识别开发完成日期），不静默跳过
+            if not result["ok"]:
+                return jsonify({"ok": False, "err": result.get("err", "生成失败")}), 400
+
+            if result.get("output_files"):
+                all_output_files.extend(result["output_files"])
+            else:
+                all_output_files.append(result["output"])
+
+            all_software_list.extend(result.get("software_list", []))
 
         if not all_output_files:
             return jsonify({"ok": False, "err": "生成失败，没有生成任何协议"}), 400

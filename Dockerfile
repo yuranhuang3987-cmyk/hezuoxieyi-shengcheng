@@ -5,12 +5,16 @@ FROM node:18-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm config set registry https://registry.npmmirror.com && npm install
 COPY frontend/ ./
 RUN npm run build
 
 # 阶段2：最终镜像
 FROM python:3.11-slim
+
+# 使用阿里云 Debian 镜像
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true
 
 # 安装 nginx，创建用户
 RUN apt-get update && \
@@ -23,8 +27,8 @@ WORKDIR /app
 # 复制后端代码
 COPY backend/ ./backend/
 
-# 安装 Python 依赖（包括 gunicorn）
-RUN pip install --no-cache-dir -r ./backend/requirements.txt gunicorn
+# 安装 Python 依赖（包括 gunicorn），使用清华镜像
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r ./backend/requirements.txt gunicorn
 
 # 复制前端构建产物
 COPY --from=frontend-builder /app/frontend/build /var/www/html

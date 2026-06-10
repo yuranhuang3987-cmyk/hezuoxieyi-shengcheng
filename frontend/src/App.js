@@ -2,30 +2,28 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Layout, Menu, Typography, ConfigProvider, Button, message } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
-import { FileTextOutlined, HistoryOutlined, UserOutlined, LogoutOutlined, TeamOutlined } from '@ant-design/icons';
+import { FileTextOutlined, UserOutlined, LogoutOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import Login from './pages/Login';
 import Home from './pages/Home';
-import History from './pages/History';
-import UserManagement from './pages/UserManagement';
 import './App.css';
 
 const { Header, Content, Footer } = Layout;
 const { Title } = Typography;
 
-// 受保护的路由
-function ProtectedRoute({ children, user, adminOnly = false }) {
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  if (adminOnly && user.role !== 'admin') {
-    return <Navigate to="/" replace />;
-  }
-  return children;
-}
-
 function AppLayout({ user, onLogout }) {
   const navigate = useNavigate();
+  const [extraMenuItems, setExtraMenuItems] = useState([]);
+  const [extraRoutes, setExtraRoutes] = useState([]);
+
+  useEffect(() => {
+    if (user.role) {
+      import('./admin').then(mod => {
+        setExtraMenuItems(mod.menuItems);
+        setExtraRoutes(mod.routes);
+      });
+    }
+  }, [user.role]);
 
   const menuItems = [
     {
@@ -33,23 +31,8 @@ function AppLayout({ user, onLogout }) {
       icon: <FileTextOutlined />,
       label: '生成协议',
     },
+    ...extraMenuItems,
   ];
-
-  // 只有管理员能看到历史记录和用户管理
-  if (user.role === 'admin') {
-    menuItems.push(
-      {
-        key: '/history',
-        icon: <HistoryOutlined />,
-        label: '历史记录',
-      },
-      {
-        key: '/users',
-        icon: <TeamOutlined />,
-        label: '用户管理',
-      }
-    );
-  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -67,9 +50,6 @@ function AppLayout({ user, onLogout }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <UserOutlined />
           <span>{user.username}</span>
-          {user.role === 'admin' && (
-            <span style={{ color: '#f5222d', fontSize: 12 }}>(管理员)</span>
-          )}
           <Button type="link" icon={<LogoutOutlined />} onClick={onLogout}>
             登出
           </Button>
@@ -80,22 +60,9 @@ function AppLayout({ user, onLogout }) {
         <div style={{ background: '#fff', padding: 24, minHeight: 380, borderRadius: 8 }}>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route
-              path="/history"
-              element={
-                <ProtectedRoute user={user} adminOnly={true}>
-                  <History />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/users"
-              element={
-                <ProtectedRoute user={user} adminOnly={true}>
-                  <UserManagement />
-                </ProtectedRoute>
-              }
-            />
+            {extraRoutes.map(r => (
+              <Route key={r.path} path={r.path} element={r.element} />
+            ))}
           </Routes>
         </div>
       </Content>
@@ -111,7 +78,6 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 检查登录状态
   useEffect(() => {
     checkAuth();
   }, []);
@@ -160,9 +126,11 @@ function App() {
           <Route
             path="/*"
             element={
-              <ProtectedRoute user={user}>
+              user ? (
                 <AppLayout user={user} onLogout={handleLogout} />
-              </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" replace />
+              )
             }
           />
         </Routes>

@@ -3,6 +3,7 @@
 
 import os
 import re
+import calendar
 import zipfile
 import xml.etree.ElementTree as ET
 from docx import Document
@@ -214,80 +215,119 @@ def extract_info(file_path):
     return software_list if software_list else []
 
 
+# 全角字符转半角（OCR 常把数字/符号识别成全角）
+_FULLWIDTH_MAP = str.maketrans(
+    "０１２３４５６７８９．／－　",
+    "0123456789./- ",
+)
+
+
+def _parse_date(date_str):
+    """
+    解析多种格式的日期字符串为 (年, 月, 日) 元组。
+
+    支持：中文（2025年1月1日）、横杠（2025-1-1）、斜杠（2025/1/1）、
+    点号（2026.06.4）、纯8位数字（20260415），并自动处理全角字符。
+    会校验月份(1-12)与日期(对应月份的合法天数)；年份要求4位。
+
+    Returns:
+        tuple (y, m, d) 解析成功；None 表示无法识别或非法日期。
+    """
+    if not date_str:
+        return None
+
+    s = str(date_str).translate(_FULLWIDTH_MAP).strip()
+
+    try:
+        if "年" in s:
+            # 中文格式：2025年3月10日
+            p = s.replace("年", " ").replace("月", " ").replace("日", " ").split()
+        elif "." in s:
+            p = s.split(".")
+        elif "/" in s:
+            p = s.split("/")
+        elif "-" in s:
+            p = s.split("-")
+        elif re.match(r"^\d{8}$", s):
+            # 纯数字格式：20260415
+            p = [s[:4], s[4:6], s[6:8]]
+        else:
+            return None
+
+        if len(p) < 3:
+            return None
+
+        y, m, d = int(p[0]), int(p[1]), int(p[2])
+    except (ValueError, IndexError):
+        return None
+
+    # 校验合法性：年份须为4位，月份 1-12，日期落在该月合法范围内
+    if not (1000 <= y <= 9999):
+        return None
+    if not (1 <= m <= 12):
+        return None
+    if not (1 <= d <= calendar.monthrange(y, m)[1]):
+        return None
+
+    return (y, m, d)
+
+
 def format_date(date_str):
     """
-    将日期转换为中文格式（2025年1月1日）
-    
+    将日期转换为中文格式（2025年1月1日）。
+
     Args:
-        date_str: 日期字符串（支持 2025-01-01, 2025/01/01, 2025年1月1日 等格式）
-    
+        date_str: 日期字符串（支持 2025-01-01, 2025/01/01, 2026.06.4, 2025年1月1日 等格式）
+
     Returns:
-        str: 中文格式日期
+        str: 中文格式日期；无法解析时原样返回输入。
     """
-    try:
-        # 已经是中文格式
-        if "年" in date_str:
-            return date_str
-        
-        # 处理横杠或斜杠格式
-        if "-" in date_str:
-            parts = date_str.split("-")
-        elif "/" in date_str:
-            parts = date_str.split("/")
-        else:
-            return date_str
-        
-        if len(parts) >= 3:
-            y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
-            return f"{y}年{m}月{d}日"
-    except:
-        pass
+    parsed = _parse_date(date_str)
+    if parsed:
+        y, m, d = parsed
+        return f"{y}年{m}月{d}日"
     return date_str
 
 
 def calc_agreement_date(dev_date, custom_date=None):
     """
-    根据开发完成日期计算协议签署日期（提前3个月）
-    如果传入自定义日期，则直接使用自定义日期
+    根据开发完成日期计算协议签署日期（提前3个月）。
+    如果传入自定义日期，则直接使用自定义日期。
 
     Args:
         dev_date: 开发完成日期（支持多种格式）
         custom_date: 自定义协议签署日期（可选，格式：2025年1月1日 或 2025-01-01）
 
     Returns:
-        str: 协议签署日期
+        str: 协议签署日期；当开发完成日期无法解析且未提供自定义日期时返回 ""（留空，由前端提示人工填写）。
     """
-    # 如果有自定义日期，直接使用
+    # 如果有自定义日期，优先使用
     if custom_date:
-        return format_date(custom_date)
-    
+        parsed = _parse_date(custom_date)
+        if parsed:
+            y, m, d = parsed
+            return f"{y}年{m}月{d}日"
+        # 自定义日期是用户主动填写的，无法规范化时保留原值，不丢失输入
+        return custom_date
+
     # 否则根据开发完成日期计算（提前3个月）
-    try:
-        # 处理多种日期格式
-        if "年" in dev_date:
-            # 中文格式：2025年3月10日
-            p = dev_date.replace("年", " ").replace("月", " ").replace("日", "").split()
-            y, m, d = int(p[0]), int(p[1]) - 3, int(p[2])
-        elif "/" in dev_date:
-            # 斜杠格式：2025/12/21
-            p = dev_date.split("/")
-            y, m, d = int(p[0]), int(p[1]) - 3, int(p[2])
-        elif "-" in dev_date:
-            # 横杠格式：2025-3-10
-            p = dev_date.split("-")
-            y, m, d = int(p[0]), int(p[1]) - 3, int(p[2])
-        else:
-            return "2025年1月1日"
+    parsed = _parse_date(dev_date)
+    if not parsed:
+        # 无法识别开发完成日期：留空，避免静默生成错误日期
+        return ""
 
-        # 处理跨年情况
-        if m <= 0:
-            m += 12
-            y -= 1
+    y, m, d = parsed
 
-        return f"{y}年{m}月{d}日"
-    except:
-        pass
-    return "2025年1月1日"
+    # 月份提前3个月，处理跨年
+    m -= 3
+    if m <= 0:
+        m += 12
+        y -= 1
+
+    # 将日期收敛到目标月份的合法范围（避免出现 2月31日 等非法日期）
+    d = min(d, calendar.monthrange(y, m)[1])
+
+    return f"{y}年{m}月{d}日"
 
 
 def check_minor_owners(owners, agreement_date):
@@ -544,6 +584,14 @@ def generate_agreement(app_file_path, template_dir, output_dir, custom_agreement
         # 准备替换内容
         software_full = f"{software_info['name']}{software_info['version']}"
         agreement_date = calc_agreement_date(software_info["date"], custom_agreement_date)
+
+        # 拦截空日期：无法识别开发完成日期且未指定自定义日期时，不生成空白日期协议
+        if not agreement_date:
+            return {
+                "ok": False,
+                "err": f"无法识别软件「{software_info['name']}」的开发完成日期"
+                       f"（原始值：{software_info.get('date', '') or '空'}），请手动指定协议签署日期后重新生成",
+            }
 
         # 构建替换列表（使用模板中的实际占位符）
         reps = []

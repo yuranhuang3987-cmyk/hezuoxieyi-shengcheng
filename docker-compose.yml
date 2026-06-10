@@ -8,7 +8,7 @@ services:
       - "80:80"
     volumes:
       # 持久化数据库
-      - ./data:/app/backend/data
+      - ./data:/app/database
       # 持久化上传文件
       - ./uploads:/app/backend/uploads
       # 持久化输出文件
