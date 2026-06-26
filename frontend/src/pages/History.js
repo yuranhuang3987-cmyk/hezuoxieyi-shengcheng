@@ -3,7 +3,7 @@ import { Card, Table, Button, Tag, Modal, Descriptions, message, Popconfirm, Spa
 import { EyeOutlined, DownloadOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
-function History() {
+function History({ isAdmin }) {
   const [loading, setLoading] = useState(false);
   const [historyData, setHistoryData] = useState([]);
   const [pagination, setPagination] = useState({
@@ -132,16 +132,18 @@ function History() {
           >
             下载
           </Button>
-          <Popconfirm
-            title="确定要删除这条记录吗？"
-            onConfirm={() => handleDelete(record.id)}
-            okText="确定"
-            cancelText="取消"
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
+          {isAdmin && (
+            <Popconfirm
+              title="确定要删除这条记录吗？"
+              onConfirm={() => handleDelete(record.id)}
+              okText="确定"
+              cancelText="取消"
+            >
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                删除
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },

@@ -593,17 +593,18 @@ def download(filename):
 
 
 @app.route("/api/history", methods=["GET"])
-@admin_required
+@login_required
 def get_history():
-    """获取历史记录列表（仅管理员）"""
+    """获取历史记录列表（管理员看全部，普通用户看自己的）"""
     try:
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 20, type=int)
 
-        pagination = (
-            History.query.order_by(History.created_at.desc())
-            .paginate(page=page, per_page=per_page, error_out=False)
-        )
+        query = History.query.order_by(History.created_at.desc())
+        if g.current_user.role != "admin":
+            query = query.filter_by(user_id=g.current_user.id)
+
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
         # 添加用户名信息
         items = []
@@ -630,13 +631,16 @@ def get_history():
 
 
 @app.route("/api/history/<int:history_id>", methods=["GET"])
-@admin_required
+@login_required
 def get_history_detail(history_id):
-    """获取单条历史记录详情（仅管理员）"""
+    """获取单条历史记录详情"""
     try:
         history = History.query.get(history_id)
         if not history:
             return jsonify({"ok": False, "err": "记录不存在"}), 404
+
+        if g.current_user.role != "admin" and history.user_id != g.current_user.id:
+            return jsonify({"ok": False, "err": "无权查看"}), 403
 
         data = history.to_dict()
         data["username"] = history.user.username if history.user else "未知"

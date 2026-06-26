@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Layout, Menu, Typography, ConfigProvider, Button, message } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
-import { FileTextOutlined, UserOutlined, LogoutOutlined } from '@ant-design/icons';
+import { FileTextOutlined, HistoryOutlined, UserOutlined, LogoutOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import Login from './pages/Login';
 import Home from './pages/Home';
+import History from './pages/History';
 import './App.css';
 
 const { Header, Content, Footer } = Layout;
@@ -30,6 +31,11 @@ function AppLayout({ user, onLogout }) {
       key: '/',
       icon: <FileTextOutlined />,
       label: '生成协议',
+    },
+    {
+      key: '/history',
+      icon: <HistoryOutlined />,
+      label: '历史记录',
     },
     ...extraMenuItems,
   ];
@@ -60,6 +66,7 @@ function AppLayout({ user, onLogout }) {
         <div style={{ background: '#fff', padding: 24, minHeight: 380, borderRadius: 8 }}>
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/history" element={<History isAdmin={!!user.role} />} />
             {extraRoutes.map(r => (
               <Route key={r.path} path={r.path} element={r.element} />
             ))}
