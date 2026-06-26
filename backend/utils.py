@@ -97,10 +97,17 @@ def extract_info(file_path):
                                 3. 个体户识别（业务关键词 + 名称特征）
                                 """
                                 from datetime import datetime
-                                
+
                                 name = str(name).strip()
                                 id_code = str(id_code).strip().upper()
-                                
+
+                                def is_chinese_name(n):
+                                    """判断是否为中文姓名（2-20个汉字，可包含·）"""
+                                    n_clean = n.replace('·', '')
+                                    if len(n_clean) < 2 or len(n_clean) > 20:
+                                        return False
+                                    return bool(re.match(r'^[一-龥]+$', n_clean))
+
                                 # === 第一层：名称强特征 ===
                                 unit_keywords = [
                                     "公司", "有限", "股份", "集团", "企业",
@@ -113,6 +120,8 @@ def extract_info(file_path):
                                 # === 第二层：身份证校验码 ===
                                 # 2.1 长度检查
                                 if len(id_code) != 18:
+                                    if is_chinese_name(name):
+                                        return False  # 位数不对但名字像自然人，当个人处理
                                     return True  # 单位或异常
                                 
                                 # 2.2 格式检查
@@ -168,13 +177,6 @@ def extract_info(file_path):
                                     else:
                                         # 校验码错误，但不是信用代码
                                         # 可能是身份证填写错误，判断名称特征
-                                        def is_chinese_name(n):
-                                            """判断是否为中文姓名（2-20个汉字，可包含·）"""
-                                            n_clean = n.replace('·', '')
-                                            if len(n_clean) < 2 or len(n_clean) > 20:
-                                                return False
-                                            return bool(re.match(r'^[\u4e00-\u9fa5]+$', n_clean))
-                                        
                                         if is_chinese_name(name):
                                             return False  # 个人（身份证填错了但名称像个人）
                                         else:
@@ -184,14 +186,6 @@ def extract_info(file_path):
                                 business_keywords = ["经营部", "工作室", "坊", "店", "行", "厂", "摊", "馆", "社"]
                                 if any(k in name for k in business_keywords):
                                     return True  # 个体户（按单位处理）
-                                
-                                # 名称长度判断
-                                def is_chinese_name(n):
-                                    """判断是否为中文姓名"""
-                                    n_clean = n.replace('·', '')
-                                    if len(n_clean) < 2 or len(n_clean) > 20:
-                                        return False
-                                    return bool(re.match(r'^[\u4e00-\u9fa5]+$', n_clean))
                                 
                                 if is_chinese_name(name):
                                     return False  # 个人
@@ -544,7 +538,7 @@ def generate_agreement(app_file_path, template_dir, output_dir, custom_agreement
     import zipfile
     import xml.etree.ElementTree as ET
     
-    template_placeholders = {"software": None, "date": None, "names": []}
+    template_placeholders = {"software": None, "dates": [], "names": []}
     
     with zipfile.ZipFile(template_file) as z:
         xml_content = z.read('word/document.xml')
@@ -563,11 +557,12 @@ def generate_agreement(app_file_path, template_dir, output_dir, custom_agreement
                 if match:
                     template_placeholders["software"] = match.group(1)
             
-            # 查找日期占位符
-            if '日期：' in para_text:
-                match = re_module.search(r'(\d{4}[-年/]\d{1,2}[-月/]\d{1,2}[日]?)', para_text)
-                if match:
-                    template_placeholders["date"] = match.group(1)
+            # 查找所有日期占位符（模板可能含多种格式，全部收集以便逐一替换）
+            if '日期' in para_text:
+                for _m in re_module.finditer(r'\d{4}[-年/]\d{1,2}[-月/]\d{1,2}日?', para_text):
+                    _d = _m.group(0)
+                    if _d not in template_placeholders["dates"]:
+                        template_placeholders["dates"].append(_d)
             
             # 查找示例姓名（2-4个汉字，且不是"甲方"等标题）
             if len(para_text) <= 10 and para_text not in ['甲方：', '乙方：', '丙方：', '丁方：', '戊方：', '己方：', '庚方：', '辛方：', '壬方：', '癸方：', '第十一方：', '第十二方：', '第十三方：']:
@@ -600,9 +595,9 @@ def generate_agreement(app_file_path, template_dir, output_dir, custom_agreement
         if template_placeholders["software"]:
             reps.append((template_placeholders["software"], software_full))
         
-        # 2. 日期
-        if template_placeholders["date"]:
-            reps.append((template_placeholders["date"], agreement_date))
+        # 2. 日期（所有格式的占位符都替换，防止模板含多处不同格式日期）
+        for _d in template_placeholders["dates"]:
+            reps.append((_d, agreement_date))
         
         # 3. 示例姓名
         for i, o in enumerate(software_info["owners"]):
