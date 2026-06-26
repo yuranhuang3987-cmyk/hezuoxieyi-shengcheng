@@ -81,7 +81,7 @@ def extract_info(file_path):
                             if "联系人" in " ".join(row) or not row or not row[0]:
                                 break
                             # 跳过标题行（增强过滤）
-                            if any(keyword in row[0] for keyword in ["公司", "营业执照", "申请人", "详细地址", "邮政编码"]):
+                            if any(keyword in row[0] for keyword in ["公司/单位", "营业执照", "申请人", "详细地址", "邮政编码"]):
                                 continue
                             idn = row[1].strip() if len(row) > 1 else ""
                             
