@@ -4,6 +4,9 @@ services:
   agreement-generator:
     build: .
     container_name: agreement-generator
+    # 时区设为北京时间，历史记录创建时间等按东八区显示
+    environment:
+      - TZ=Asia/Shanghai
     ports:
       - "80:80"
     volumes:

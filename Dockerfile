@@ -12,13 +12,19 @@ RUN npm run build
 # 阶段2：最终镜像
 FROM python:3.11-slim
 
+# 设置时区为北京时间（东八区）——影响历史记录创建时间、日志等所有 datetime.now()
+ENV TZ=Asia/Shanghai
+
 # 使用阿里云 Debian 镜像
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
     sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true
 
-# 安装 nginx，创建用户
+# 安装 nginx 与时区数据 tzdata，配置时区，创建用户
+# DEBIAN_FRONTEND=noninteractive 避免 tzdata 安装时弹出地理区域选择导致构建卡住
 RUN apt-get update && \
-    apt-get install -y nginx && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y nginx tzdata && \
+    ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone && \
     rm -rf /var/lib/apt/lists/* && \
     useradd -r -s /sbin/nologin nginx 2>/dev/null || true
 
