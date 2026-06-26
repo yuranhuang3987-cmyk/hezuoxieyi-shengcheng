@@ -102,9 +102,8 @@ def extract_info(file_path):
                                 id_code = str(id_code).strip().upper()
 
                                 def is_chinese_name(n):
-                                    """判断是否为中文姓名（2-20个汉字，可包含·）"""
                                     n_clean = n.replace('·', '')
-                                    if len(n_clean) < 2 or len(n_clean) > 20:
+                                    if len(n_clean) < 2 or len(n_clean) > 4:
                                         return False
                                     return bool(re.match(r'^[一-龥]+$', n_clean))
 
