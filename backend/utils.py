@@ -355,7 +355,7 @@ def check_minor_owners(owners, agreement_date):
         name = owner.get("name", "")
         
         # 从身份证号码提取出生日期
-        if len(idn) >= 14 and idn[:17].isdigit():
+        if len(idn) == 18 and idn[:17].isdigit():
             try:
                 # 身份证第7-14位是出生日期（YYYYMMDD）
                 birth_year = int(idn[6:10])
