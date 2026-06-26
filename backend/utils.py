@@ -99,7 +99,7 @@ def extract_info(file_path):
                                 from datetime import datetime
 
                                 name = str(name).strip()
-                                id_code = str(id_code).strip().upper()
+                                id_code = str(id_code).translate(_FULLWIDTH_MAP).replace(' ', '').strip().upper()
 
                                 def is_chinese_name(n):
                                     n_clean = n.replace('·', '')
@@ -109,7 +109,7 @@ def extract_info(file_path):
 
                                 # === 第一层：名称强特征 ===
                                 unit_keywords = [
-                                    "公司", "有限", "股份", "集团", "企业",
+                                    "公司", "有限", "股份", "集团", "企业", "银行",
                                     "大学", "学院", "学校", "医院", "研究所", "研究院",
                                     "中心", "协会", "基金会", "合作社", "事务所"
                                 ]
@@ -182,7 +182,7 @@ def extract_info(file_path):
                                             return True  # 单位
                                 
                                 # === 第三层：个体户识别 ===
-                                business_keywords = ["经营部", "工作室", "坊", "店", "行", "厂", "摊", "馆", "社"]
+                                business_keywords = ["经营部", "工作室", "坊", "店", "厂", "摊", "馆"]
                                 if any(k in name for k in business_keywords):
                                     return True  # 个体户（按单位处理）
                                 
@@ -351,9 +351,9 @@ def check_minor_owners(owners, agreement_date):
         if not owner.get("is_person"):
             continue
         
-        idn = owner.get("idn", "")
+        idn = str(owner.get("idn", "")).translate(_FULLWIDTH_MAP).replace(' ', '').strip().upper()
         name = owner.get("name", "")
-        
+
         # 从身份证号码提取出生日期
         if len(idn) == 18 and idn[:17].isdigit():
             try:
@@ -380,30 +380,49 @@ def check_minor_owners(owners, agreement_date):
 
 
 def replace_paragraph_text(para, old_text, new_text):
-    """
-    替换段落中的文本
-    
-    Args:
-        para: 段落对象
-        old_text: 要替换的文本
-        new_text: 新文本
-    """
+    """替换段落中的文本，尽量保留原有 run 格式"""
     if old_text not in para.text:
         return False
-    
+
     runs = para.runs
     if not runs:
         return False
-    
-    # 获取完整段落文本并替换
-    full_text = para.text.replace(old_text, new_text)
-    
-    # 清空所有 runs 的文本
+
+    # 尝试单 run 内替换（最常见，完美保留格式）
     for r in runs:
-        r.text = ""
-    
-    # 将替换后的完整文本设置到第一个 run
-    runs[0].text = full_text
+        if old_text in r.text:
+            r.text = r.text.replace(old_text, new_text)
+            return True
+
+    # old_text 跨多个 run：拼接所有 run 文本，定位目标区间，
+    # 只清空涉及的 run 并把替换结果放进第一个涉及的 run，保留其格式
+    texts = [r.text for r in runs]
+    full = ''.join(texts)
+    start = full.find(old_text)
+    if start < 0:
+        return False
+    end = start + len(old_text)
+
+    pos = 0
+    first_run = last_run = -1
+    for i, t in enumerate(texts):
+        run_end = pos + len(t)
+        if first_run < 0 and run_end > start:
+            first_run = i
+        if run_end >= end:
+            last_run = i
+            break
+        pos = run_end
+
+    # 计算首/末 run 中要保留的前缀和后缀
+    pos = sum(len(texts[j]) for j in range(first_run))
+    prefix = texts[first_run][:start - pos]
+    pos_last = sum(len(texts[j]) for j in range(last_run))
+    suffix = texts[last_run][end - pos_last:]
+
+    runs[first_run].text = prefix + new_text + suffix
+    for i in range(first_run + 1, last_run + 1):
+        runs[i].text = ''
     return True
 
 
